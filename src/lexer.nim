@@ -228,6 +228,22 @@ proc skipWhitespace(L: var Lexer) =
   while L.current() in WhitespaceChars:
     inc(L.bufpos)
 
+proc getSymbol(L: var Lexer): Token =
+  let pos = L.here()
+  inc(L.bufpos)
+  let start = L.bufpos
+  while true:
+    case L.current()
+    of '`':
+      break
+    of '\c', '\n', EndOfFile:
+      return Token(kind: tkInvalid, pos: pos)
+    else:
+      inc(L.bufpos)
+  result = Token(kind: tkSymbol, pos: pos, strVal: L.buf[start..<L.bufpos])
+  inc(L.bufpos)
+
+
 proc getNextToken*(L: var Lexer): Token =
   L.skipWhitespace()
   let 
@@ -331,6 +347,8 @@ proc getNextToken*(L: var Lexer): Token =
     L.bufpos = i
   of '#':
     result = L.getComment()
+  of '`':
+    result = L.getSymbol()
   of DecimalDigits:
     result = L.getNumber()
   of IdentStartChars:

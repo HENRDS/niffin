@@ -53,6 +53,12 @@ proc match(p: var Parser, tk: TokenKind): bool =
     p.advance()
     result = true
 
+proc matchAny(p: var Parser, tks: varargs[TokenKind]): bool =
+  result = false
+  if p.cur.kind in tks:
+    p.advance()
+    result = true
+
 proc consume(p: var Parser, tk: TokenKind, msg: string): bool =
   result = true
   if not p.match(tk):
@@ -315,7 +321,8 @@ proc getRule(tk: TokenKind): ParserRule =
 proc varDef(p: var Parser): Node =
   let kwd = p.cur
   p.advance()
-  if not p.consume(tkIdentifier, "Expected identifier in var declaration"):
+  if not p.matchAny(tkIdentifier, tkSymbol):
+    p.errAtCurrent("Expected identifier or symbol in var declaration")
     return newInvalidNode(kwd.pos)
   let 
     name = p.prev
@@ -333,7 +340,10 @@ proc varDef(p: var Parser): Node =
     newNodeWithChildren(
       nkVarDef,
       kwd.pos,
-      newIdentNode(name.pos, name.strVal),
+      if name.kind == tkIdentifier:
+        newIdentNode(name.pos, name.strVal)
+      else:
+        newSymNode(name.pos, name.strVal),
       typ,
       init
     )
@@ -343,7 +353,8 @@ proc varDef(p: var Parser): Node =
 proc letDef(p: var Parser): Node =
   let kwd = p.cur
   p.advance()
-  if not p.consume(tkIdentifier, "Expected identifier in var declaration"):
+  if not p.matchAny(tkIdentifier, tkSymbol):
+    p.errAtCurrent("Expected identifier or symbol in let declaration")
     return newInvalidNode(kwd.pos)
   let 
     name = p.prev
@@ -361,7 +372,10 @@ proc letDef(p: var Parser): Node =
     newNodeWithChildren(
       nkLetDef,
       kwd.pos,
-      newIdentNode(name.pos, name.strVal),
+      if name.kind == tkIdentifier:
+        newIdentNode(name.pos, name.strVal)
+      else:
+        newSymNode(name.pos, name.strVal),
       typ,
       init
     )
@@ -424,7 +438,7 @@ proc isValidForPattern(node: Node): bool =
 proc funDef(p: var Parser): Node = 
   p.advance()
   let kwd = p.prev
-  if not p.match(tkIdentifier):
+  if not p.matchAny(tkIdentifier, tkSymbol):
     return p.lambdaExpr();
   let name = p.prev
   let generics = newNodeWithChildren(nkGenericParams, p.cur.pos)
@@ -458,7 +472,10 @@ proc funDef(p: var Parser): Node =
   result = newNodeWithChildren(
     nkFunDef,
     kwd.pos,
-    newIdentNode(name.pos, name.strVal),
+    if name.kind == tkIdentifier:
+      newIdentNode(name.pos, name.strVal)
+    else:
+      newSymNode(name.pos, name.strVal),
     generics,
     params,
     retType,
