@@ -7,7 +7,7 @@ type
     hadError: bool
   Precedence = enum
     prNone, prTuple, prConditional, prOr, prAnd, prEquality, prComparison, prCat, 
-    prRange, prSum, prProduct, prPow, prPrefix, prCall, prAccess
+    prRange, prSum, prProduct, prPow, prPrefix, prCall, prAccess, prPrimary
   InfixParselet = proc(p: var Parser, node: Node): Node
   PrefixParselet = proc(p: var Parser): Node
   ParserRule = ref object
@@ -72,6 +72,7 @@ proc initParser*(s: Stream, fileIndex: FileIndex): Parser =
 proc parseExpression(p: var Parser): Node
 proc parsePrecedence(p: var Parser, prec: Precedence): Node
 proc getRule(tk: TokenKind): ParserRule
+proc echoAst*(n: Node, indent: Natural = 0) # for debug
 
 proc literal(p: var Parser): Node =
   case p.prev.kind
@@ -119,9 +120,13 @@ proc infix(p: var Parser, lhs: Node): Node =
     rhs
   )
 
-proc call(p: var Parser, callee: Node ): Node =
+proc call(p: var Parser, lhs: Node ): Node =
   let paren = p.prev
-  result = newNodeWithChildren(nkCall, paren.pos, callee)
+  result = newNodeWithChildren(nkCall, paren.pos)
+  if lhs.kind == nkInfix and lhs[0].strVal == "." and lhs[2].kind in {nkSymbol, nkIdent}:
+    result.add(lhs[2])
+    result.add(lhs[1])
+
   if not p.match(tkRightParen):
     while true:
       result.add(p.parsePrecedence(TupleSuccPrecedence))
@@ -183,15 +188,22 @@ proc conditional(p: var Parser, lhs: Node): Node=
       then
     )
 
-proc formalParam(p: var Parser): Node =
+proc formalParam(p: var Parser, allowModifier: bool = true): Node =
   if not p.consume(tkIdentifier, "Expected identifier"):
     return newInvalidNode(p.cur.pos)
   let 
     nameTk = p.prev
-    name = newIdentNode(nameTk.pos, nameTk.strVal)
+    name = newIdentNode(nameTk.pos, nameTk.strVal) 
     typ = 
       if p.match(tkColon):
-        p.parseExpression()
+        if allowModifier and p.match(tkVar):
+          newNodeWithChildren(
+            nkVarType,
+            p.prev.pos,
+            p.parsePrecedence(TupleSuccPrecedence)
+          )
+        else:
+          p.parsePrecedence(TupleSuccPrecedence)
       else:
         newEmptyNode()
   result = newNodeWithChildren(
@@ -209,7 +221,7 @@ proc lambdaExpr(p: var Parser): Node =
   let generics = newNodeWithChildren(nkGenericParams, p.cur.pos)
   if p.match(tkLeftBracket):
     while true:
-      generics.add(p.formalParam())
+      generics.add(p.formalParam(false))
       if likely(p.match(tkComma)):
         continue
       break
@@ -241,14 +253,21 @@ proc lambdaExpr(p: var Parser): Node =
       params,
       retType
     )
-  let body = p.parseExpression()
+  let 
+    arrow = p.prev
+    body = p.parseExpression()
   result = newNodeWithChildren(
-    nkLambda,
+    if kwd.kind == tkProc: nkProcDef
+    else: nkFunDef,
     kwd.pos,
     generics,
     params,
     retType,
-    body
+    newNodeWithChildren(
+      nkReturn,
+      arrow.pos,
+      body
+    )
   ) 
 
 
@@ -435,7 +454,7 @@ proc isValidForPattern(node: Node): bool =
   else: 
     false
 
-proc funDef(p: var Parser): Node = 
+proc funOrProcDef(p: var Parser): Node = 
   p.advance()
   let kwd = p.prev
   if not p.matchAny(tkIdentifier, tkSymbol):
@@ -444,14 +463,14 @@ proc funDef(p: var Parser): Node =
   let generics = newNodeWithChildren(nkGenericParams, p.cur.pos)
   if p.match(tkLeftBracket):
     while true:
-      generics.add(p.formalParam())
+      generics.add(p.formalParam(false))
       if likely(p.match(tkComma)):
         continue
       break
     discard p.consume(tkRightBracket, "Expected ']' after generic parameters")
     
 
-  if not p.consume(tkLeftParen, "Expected '(' in lambda expression"):
+  if not p.consume(tkLeftParen, "Expected '(' in fun or proc declaration"):
     return newInvalidNode(kwd.pos)
   let params = newNodeWithChildren(nkFormalParams, kwd.pos)
   if p.cur.kind != tkRightParen:
@@ -460,7 +479,7 @@ proc funDef(p: var Parser): Node =
       if likely(p.match(tkComma)):
         continue
       break
-  if not p.consume(tkRightParen, "Expected ')' after lambda expression parameters"):
+  if not p.consume(tkRightParen, "Expected ')' after fun or proc parameters"):
     return newInvalidNode(p.cur.pos)
   let 
     retType = 
@@ -470,7 +489,8 @@ proc funDef(p: var Parser): Node =
         newEmptyNode()
     body = p.stmtBlock()
   result = newNodeWithChildren(
-    nkFunDef,
+    if kwd.kind == tkProc: nkProcDef
+    else: nkFunDef,
     kwd.pos,
     if name.kind == tkIdentifier:
       newIdentNode(name.pos, name.strVal)
@@ -559,13 +579,14 @@ proc parseStmt(p: var Parser): Node =
     discard p.consume(tkSemicolon, "Expected ';' after expression")
 
 proc parseDecl(p: var Parser): Node =
+  
   case p.cur.kind
   of tkVar:
     result = p.varDef()
   of tkLet:
     result = p.letDef()
-  of tkFun:
-    result = p.funDef()
+  of tkFun, tkProc:
+    result = p.funOrProcDef()
   else: 
     result = p.parseStmt()
 
@@ -573,6 +594,7 @@ proc parseStmtList(p: var Parser): Node =
   result = newNodeWithChildren(nkStmtList, p.cur.pos)
   while p.cur.kind != tkEof:
     result.children.add(p.parseDecl())
+
 proc parse*(p: var Parser): Node =
   p.parseStmtList()
 

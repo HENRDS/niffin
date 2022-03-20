@@ -24,7 +24,7 @@ type
     tkClass = "class", tkContinue = "continue", tkDiscard= "discard", 
     tkElif = "elif", tkElse = "else", tkEnum = "enum", tkFalse = "false", 
     tkFor = "for", tkFun = "fun", tkIf = "if", tkIn = "in", tkLet = "let", tkNot = "not",
-    tkNil = "nil", tkOr = "or", tkReturn = "return",
+    tkNil = "nil", tkOr = "or", tkProc = "proc", tkReturn = "return",
     tkTrue = "true", tkVar = "var", tkWhile = "while"
 const 
   Keyworks* = {tkAnd..tkWhile}
@@ -197,6 +197,7 @@ proc getIdentifier(L: var Lexer): Token =
               of "not": tkNot
               of "nil": tkNil
               of "or": tkOr
+              of "proc": tkProc
               of "return": tkReturn
               of "true": tkTrue
               of "var": tkVar

@@ -1,4 +1,4 @@
-import ./fileman, std/[strformat]
+import ./fileman, std/[strformat, hashes]
 
 type 
   NodeKind* = enum
@@ -16,26 +16,26 @@ type
     nkTuple = "Tuple",
     nkInfix = "Infix", 
     nkPrefix = "Prefix", 
-    nkLambda = "Lambda", 
     nkIf = "If", 
     nkCall = "Call", 
     nkAssign = "Assign",
     nkWhile = "While",
     nkFor = "For",
-    nkBreak = "Break"
-    nkContinue = "Continue"
-    nkReturn = "Return"
-    nkIndex = "Index", 
-    nkVarDef = "Var", 
-    nkLetDef = "Let", 
-    nkDotExpr = "Dot",
+    nkBreak = "Break",
+    nkContinue = "Continue",
+    nkReturn = "Return",
+    nkIndex = "Index",
+    nkVarDef = "Var",
+    nkLetDef = "Let",
     nkConditional = "Conditional",
     nkDiscard = "Discard",
     nkFormalParams = "FormalParams",
     nkParam = "Param",
     nkGenericParams = "GenericParams",
     nkFunType = "FunType",
+    nkVarType = "VarType",
     nkFunDef = "FunDef",
+    nkProcDef = "ProcDef",
     nkStmtList = "StmtList"
   Node* {.final,acyclic.} = ref object 
     position*: SourcePosition
@@ -52,6 +52,10 @@ type
 const 
   ValuedNodes = { nkStrLit, nkIdent, nkIntLit, nkFloatLit, nkSymbol}
   
+
+proc hash*(node: Node): Hash =
+  return cast[Hash](node)
+
 proc newEmptyNode*(): Node=
   Node(kind: nkEmpty)
 

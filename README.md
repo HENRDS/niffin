@@ -45,6 +45,12 @@ let y = 2;
 # let bindings cannot be reassigned
 # y = 3 # <- error
 
+# proc's can have side effects
+proc incX(){
+    x = x + 1;
+}
+
+# fun's are pure functions
 fun add(a: int, b: int): int {
     return a + b;
 }
@@ -61,12 +67,12 @@ fun add(a: int, b: int): int {
 
 # The following are all equivalent
 discard 1.add(2);
-discar add(1, 2);
+discard add(1, 2);
 ```
 # To do
 
 - [X] Lexer
 - [X] Parser (in progress)
-- [ ] Resolver
+- [ ] Resolver (in progress)
 - [ ] Type checker
 - [ ] Virtual machine
